@@ -28,10 +28,11 @@ var (
 	}
 )
 
-func TestLoadData(t *testing.T) {
+func TestFLoadData(t *testing.T) {
 	cd := New(&Options{
-		Reduced: true,
-		UseMMap: true,
+		Reduced:  true,
+		UseMMap:  true,
+		MMapPath: dumpPath,
 	})
 	defer cd.Close()
 	// add the words
@@ -39,11 +40,14 @@ func TestLoadData(t *testing.T) {
 		err := cd.Insert([]byte(word), i)
 		tt.Nil(t, err)
 	}
+	val, err := cd.Get([]byte("魔术师"))
+	tt.Nil(t, err)
+	tt.Equal(t, 0, val)
 
 	// update the words
 	for i, word := range words {
 		err := cd.Delete([]byte(word))
-		tt.Nil(t, err)
+		tt.Nil(t, err, word)
 
 		err = cd.Update([]byte(word), i)
 		tt.Nil(t, err)
@@ -56,24 +60,25 @@ func TestLoadData(t *testing.T) {
 	}
 }
 
-func TestFind(t *testing.T) {
+func TestFFind(t *testing.T) {
 	cd := New(&Options{
-		Reduced: true,
-		UseMMap: true,
+		Reduced:  true,
+		UseMMap:  true,
+		MMapPath: dumpPath,
 	})
 	defer cd.Close()
-	key, err := cd.Find([]byte("a"), 0)
-	tt.Nil(t, err)
-	tt.Equal(t, 0, key)
+	// key, err := cd.Find([]byte("魔术师"), 0)
+	// tt.Nil(t, err)
+	// tt.Equal(t, 0, key)
 
-	val, err := cd.Get([]byte("ab"))
+	val, err := cd.Get([]byte("魔术师"))
 	tt.Nil(t, err)
-	tt.Equal(t, 2, val)
+	tt.Equal(t, 0, val)
 
-	to, err := cd.Jump([]byte("abc"), 0)
-	tt.Nil(t, err)
-	tt.Equal(t, 352, to)
-	val, err = cd.Value(to)
-	tt.Nil(t, err)
-	tt.Equal(t, 3, val)
+	// to, err := cd.Jump([]byte("活得精彩"), 0)
+	// tt.Nil(t, err)
+	// tt.Equal(t, 352, to)
+	// val, err = cd.Value(to)
+	// tt.Nil(t, err)
+	// tt.Equal(t, 3, val)
 }
