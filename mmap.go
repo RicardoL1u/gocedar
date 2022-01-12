@@ -16,7 +16,6 @@ import (
 const (
 	defaultMaxFileSize = 1 << 34                                         // 文件最大为 16G
 	defaultMaxSize     = defaultMaxFileSize / int(unsafe.Sizeof(Node{})) // 最大插入10亿个key
-	defaultMemMapSize  = 1 << 34                                         // 假设映射的内存大小为 16G
 
 	nodeSize  = int(unsafe.Sizeof(Node{}))
 	nInfoSize = int(unsafe.Sizeof(NInfo{}))
@@ -48,102 +47,109 @@ type MetaInfo struct {
 }
 
 type MMap struct {
-	initSize                           int64
+	mmapDir                            string
+	isNew                              bool
+	initSize                           int
 	array                              *[defaultMaxSize]Node
 	block                              *[defaultMaxSize >> 8]Block
 	nInfo                              *[defaultMaxSize]NInfo
 	metaInfo                           *MetaInfo
 	arrayBytes, blockBytes, nInfoBytes []byte
 	arrayFile, blockFile, nInfoFile    *os.File
+	arrayMSize, blockMSize, nInfoMSize int
 }
 
 func NewMMap(mmapDir string) *MMap {
 	if _, err := os.Stat(mmapDir); err != nil {
 		_assert(os.MkdirAll(mmapDir, fileMode) == nil, "mkdir mmapdir fail")
 	}
-	arrayFile, err := os.OpenFile(path.Join(mmapDir, arrayFileName), os.O_CREATE|os.O_RDWR, fileMode)
-	_assert(err == nil, "Open arrayFile fail %v", err)
-	blockFile, err := os.OpenFile(path.Join(mmapDir, blockFileName), os.O_CREATE|os.O_RDWR, fileMode)
-	_assert(err == nil, "Open blockFile fail %v", err)
-	nInfoFile, err := os.OpenFile(path.Join(mmapDir, nInfoFileName), os.O_CREATE|os.O_RDWR, fileMode)
-	_assert(err == nil, "Open nInfoFile fail %v", err)
+
 	// if file size isn't align, return error (not all is zero, or key size is not the same)
-	db := &MMap{
-		arrayFile: arrayFile,
-		blockFile: blockFile,
-		nInfoFile: nInfoFile,
+	m := &MMap{
+		mmapDir: mmapDir,
 	}
-	i1, _ := arrayFile.Stat()
-	i2, _ := blockFile.Stat()
-	i3, _ := nInfoFile.Stat()
-	nodeNumber := i1.Size() / int64(nodeSize)
-	blockNumber := int64(math.Max(float64(int(i2.Size())-metaSize), 0)) / int64(blockSize)
-	ninfoNumber := i3.Size() / int64(nInfoSize)
+	m.OpenFile()
+	ai, _ := m.arrayFile.Stat()
+	bi, _ := m.blockFile.Stat()
+	ni, _ := m.nInfoFile.Stat()
+
+	// check the node number is equal in every file
+	nodeNumber := ai.Size() / int64(nodeSize)
+	blockNumber := int64(math.Max(float64(int(bi.Size())-metaSize), 0)) / int64(blockSize)
+	ninfoNumber := ni.Size() / int64(nInfoSize)
 	_assert(nodeNumber>>8 == blockNumber,
 		"node number %d and block number %d not align, remove file in path and retry", nodeNumber, blockNumber)
 	_assert(nodeNumber == ninfoNumber,
 		"node number %d and ninfoNumber %d not align, remove file in path and retry", nodeNumber, ninfoNumber)
-	db.initSize = i1.Size() / int64(nodeSize)
-	if db.initSize == 0 {
-		db.initSize = defaultNodeNumber
-		grow(arrayFile, int64(defaultNodeNumber*nodeSize))
-		grow(blockFile, int64(defaultNodeNumber>>8*blockSize+metaSize))
-		grow(nInfoFile, int64(defaultNodeNumber*nInfoSize))
+
+	m.initSize = int(ai.Size()) / nodeSize
+	if m.initSize == 0 {
+		m.isNew = true
+		m.initSize = defaultNodeNumber
 	}
-	db.arrayBytes = mmap(arrayFile)
-	db.array = (*[defaultMaxSize]Node)(unsafe.Pointer(&db.arrayBytes[0]))
-	db.blockBytes = mmap(blockFile)
-	db.metaInfo = (*MetaInfo)(unsafe.Pointer(&db.blockBytes[0]))
-	db.block = (*[defaultMaxSize >> 8]Block)(unsafe.Pointer(&db.blockBytes[metaSize]))
-	db.nInfoBytes = mmap(nInfoFile)
-	db.nInfo = (*[defaultMaxSize]NInfo)(unsafe.Pointer(&db.nInfoBytes[0]))
-	return db
+	m.allocate(m.initSize)
+	return m
+}
+
+func (m *MMap) OpenFile() {
+	var err error
+	m.arrayFile, err = os.OpenFile(path.Join(m.mmapDir, arrayFileName), os.O_CREATE|os.O_RDWR, fileMode)
+	_assert(err == nil, "Open arrayFile fail %v", err)
+	m.blockFile, err = os.OpenFile(path.Join(m.mmapDir, blockFileName), os.O_CREATE|os.O_RDWR, fileMode)
+	_assert(err == nil, "Open blockFile fail %v", err)
+	m.nInfoFile, err = os.OpenFile(path.Join(m.mmapDir, nInfoFileName), os.O_CREATE|os.O_RDWR, fileMode)
+	_assert(err == nil, "Open nInfoFile fail %v", err)
 }
 
 // initData in Cedar inplace
-func (m *MMap) InitData(c *Cedar) {
+func (m *MMap) InitData(c *Cedar) (isNew bool) {
 	c.array = m.array[:m.initSize]
 	c.blocks = m.block[:m.initSize>>8]
 	c.nInfos = m.nInfo[:m.initSize]
 	c.MetaInfo = m.metaInfo
-	if !c.inited {
-		c.Reduced = true
-		c.capacity = defaultNodeNumber
-		c.size = defaultNodeNumber
-		c.ordered = true
-		c.maxTrial = 1
-		c.inited = true
-		if !c.Reduced {
-			c.array[0] = Node{baseV: 0, check: -1}
-		} else {
-			c.array[0] = Node{baseV: -1, check: -1}
-		}
-		// make `baseV` point to the previous element, and make `check` point to the next element
-		for i := 1; i < defaultNodeNumber; i++ {
-			c.array[i] = Node{baseV: -(i - 1), check: -(i + 1)}
-		}
-		// make them link as a cyclic doubly-linked list
-		c.array[1].baseV = -(defaultNodeNumber - 1)
-		c.array[defaultNodeNumber-1].check = -1
-
-		c.blocks[0].eHead = 1
-		c.blocks[0].init()
-
-		for i := 0; i <= defaultNodeNumber; i++ {
-			c.reject[i] = i + 1
-		}
-	}
 	c.mmap = m
+	c.inited = true
+	return c.mmap.isNew
 }
 
-// addBlock in Cedar inplace
-func (m *MMap) AddBlock(c *Cedar) {
-	grow(m.arrayFile, int64(c.capacity*nodeSize))
-	grow(m.blockFile, int64(metaSize+c.capacity>>8*blockSize))
-	grow(m.nInfoFile, int64(c.capacity*nInfoSize))
+// addBlock in Cedar inplace depends on c.capacity
+func (m *MMap) AddBlock(c *Cedar, capacity int) {
+	m.allocate(capacity)
+
+	c.MetaInfo = m.metaInfo
 	c.array = m.array[:c.capacity]
 	c.blocks = m.block[:c.capacity>>8]
 	c.nInfos = m.nInfo[:c.capacity]
+}
+
+// allocate remmap depends on arrayMSize blockMSize nInfoMSize
+func (m *MMap) allocate(cap int) {
+	// compute memory size
+	m.arrayMSize = cap * nodeSize
+	m.blockMSize = metaSize + cap>>8*blockSize
+	m.nInfoMSize = cap * nInfoSize
+
+	if len(m.arrayBytes) > 0 {
+		munmap(m.arrayBytes)
+		munmap(m.blockBytes)
+		munmap(m.nInfoBytes)
+	}
+
+	// grow file to memory size
+	grow(m.arrayFile, int64(m.arrayMSize))
+	grow(m.blockFile, int64(m.blockMSize))
+	grow(m.nInfoFile, int64(m.nInfoMSize))
+
+	// mmap memory
+	m.arrayBytes = mmap(m.arrayFile, int(m.arrayMSize))
+	m.array = (*[defaultMaxSize]Node)(unsafe.Pointer(&m.arrayBytes[0]))
+
+	m.blockBytes = mmap(m.blockFile, int(m.blockMSize))
+	m.metaInfo = (*MetaInfo)(unsafe.Pointer(&m.blockBytes[0]))
+	m.block = (*[defaultMaxSize >> 8]Block)(unsafe.Pointer(&m.blockBytes[metaSize]))
+
+	m.nInfoBytes = mmap(m.nInfoFile, int(m.nInfoMSize))
+	m.nInfo = (*[defaultMaxSize]NInfo)(unsafe.Pointer(&m.nInfoBytes[0]))
 }
 
 func (c *Cedar) Close() {
@@ -163,8 +169,8 @@ func _assert(condition bool, msg string, v ...interface{}) {
 	}
 }
 
-func mmap(file *os.File) []byte {
-	ab, err := syscall.Mmap(int(file.Fd()), 0, defaultMemMapSize, syscall.PROT_WRITE|syscall.PROT_READ, syscall.MAP_SHARED)
+func mmap(file *os.File, size int) []byte {
+	ab, err := syscall.Mmap(int(file.Fd()), 0, size, syscall.PROT_WRITE|syscall.PROT_READ, syscall.MAP_SHARED)
 	_assert(err == nil, "failed to mmap %v", err)
 	return ab
 }

@@ -4,7 +4,14 @@
 
 package cedar
 
-import "os"
+import (
+	"os"
+	"unsafe"
+)
+
+const (
+	maxMemStep = 1 << 30
+)
 
 // NInfo stores the information about the trie
 type NInfo struct {
@@ -86,26 +93,22 @@ type Options struct {
 // New initialize the Cedar for further use
 func New(opt *Options) *Cedar {
 	cd := &Cedar{}
+	isNew := true
 	if opt.UseMMap {
 		if len(opt.MMapPath) == 0 {
 			opt.MMapPath = os.TempDir()
 		}
 		mmap := NewMMap(opt.MMapPath)
-		mmap.InitData(cd)
+		isNew = mmap.InitData(cd)
+	}
+	if !isNew {
 		return cd
 	}
-	cd = &Cedar{
-		array:  make([]Node, 256),
-		nInfos: make([]NInfo, 256),
-		blocks: make([]Block, 1),
-		MetaInfo: &MetaInfo{
-			Reduced:  isReduced(opt.Reduced),
-			capacity: 256,
-			size:     256,
-			ordered:  true,
-			maxTrial: 1,
-		},
-	}
+	cd.Reduced = isReduced(opt.Reduced)
+	cd.capacity = 256
+	cd.size = 256
+	cd.ordered = true
+	cd.maxTrial = 1
 
 	if !cd.Reduced {
 		cd.array[0] = Node{baseV: 0, check: -1}
@@ -595,10 +598,13 @@ func (cd *Cedar) pushBlock(idx int, to *int, empty bool) {
 // Reallocate more spaces so that we have more free blocks.
 func (cd *Cedar) addBlock() int {
 	if cd.size == cd.capacity {
-		cd.capacity += cd.capacity
-
+		if cd.capacity*int(unsafe.Sizeof(Node{})) > maxMemStep {
+			cd.capacity += maxMemStep / int(unsafe.Sizeof(Node{}))
+		} else {
+			cd.capacity += cd.capacity
+		}
 		if cd.inited {
-			cd.mmap.AddBlock(cd)
+			cd.mmap.AddBlock(cd, cd.capacity)
 		} else {
 			array := cd.array
 			cd.array = make([]Node, cd.capacity)

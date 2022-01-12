@@ -4,7 +4,7 @@
 .idea
 
 examples/examples
-test_dump/
+dump_path/
 
 # Binaries for programs and plugins
 *.exe
