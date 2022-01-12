@@ -32,9 +32,10 @@ const (
 
 // nolint
 type MetaInfo struct {
-	inited  bool // determine if the file is empty
-	Reduced bool
-	reject  [257]int
+	useMMap  bool // determine if mmap inited
+	LoadSize int  // key size when mmaped
+	Reduced  bool
+	reject   [257]int
 
 	blocksHeadFull   int // the index of the first 'Full' block, 0 means no 'Full' block
 	blocksHeadClosed int // the index of the first 'Closed' block, 0 means no ' Closed' block
@@ -47,8 +48,8 @@ type MetaInfo struct {
 }
 
 type MMap struct {
+	loadSize                           int
 	mmapDir                            string
-	isNew                              bool
 	initSize                           int
 	array                              *[defaultMaxSize]Node
 	block                              *[defaultMaxSize >> 8]Block
@@ -84,8 +85,9 @@ func NewMMap(mmapDir string) *MMap {
 
 	m.initSize = int(ai.Size()) / nodeSize
 	if m.initSize == 0 {
-		m.isNew = true
 		m.initSize = defaultNodeNumber
+	} else {
+		m.loadSize = m.initSize
 	}
 	m.allocate(m.initSize)
 	return m
@@ -102,14 +104,13 @@ func (m *MMap) OpenFile() {
 }
 
 // initData in Cedar inplace
-func (m *MMap) InitData(c *Cedar) (isNew bool) {
+func (m *MMap) InitData(c *Cedar) {
 	c.array = m.array[:m.initSize]
 	c.blocks = m.block[:m.initSize>>8]
 	c.nInfos = m.nInfo[:m.initSize]
 	c.MetaInfo = m.metaInfo
 	c.mmap = m
-	c.inited = true
-	return c.mmap.isNew
+	c.LoadSize = m.loadSize
 }
 
 // addBlock in Cedar inplace depends on c.capacity
@@ -153,7 +154,7 @@ func (m *MMap) allocate(cap int) {
 }
 
 func (c *Cedar) Close() {
-	if c.inited {
+	if c.useMMap {
 		munmap(c.mmap.arrayBytes)
 		munmap(c.mmap.blockBytes)
 		munmap(c.mmap.nInfoBytes)
