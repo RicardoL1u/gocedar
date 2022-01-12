@@ -93,15 +93,15 @@ type Options struct {
 // New initialize the Cedar for further use
 func New(opt *Options) *Cedar {
 	cd := &Cedar{}
-	isNew := true
 	if opt.UseMMap {
 		if len(opt.MMapPath) == 0 {
 			opt.MMapPath = os.TempDir()
 		}
 		mmap := NewMMap(opt.MMapPath)
-		isNew = mmap.InitData(cd)
+		mmap.InitData(cd)
+		cd.useMMap = true
 	}
-	if !isNew {
+	if cd.LoadSize > 0 { // if there is data in mmap, do not need init meta
 		return cd
 	}
 	cd.Reduced = isReduced(opt.Reduced)
@@ -603,7 +603,7 @@ func (cd *Cedar) addBlock() int {
 		} else {
 			cd.capacity += cd.capacity
 		}
-		if cd.inited {
+		if cd.useMMap {
 			cd.mmap.AddBlock(cd, cd.capacity)
 		} else {
 			array := cd.array
