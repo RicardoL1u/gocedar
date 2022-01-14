@@ -100,6 +100,11 @@ func New(opt *Options) *Cedar {
 		mmap := NewMMap(opt.MMapPath)
 		mmap.InitData(cd)
 		cd.useMMap = true
+	} else {
+		cd.MetaInfo = &MetaInfo{}
+		cd.array = make([]Node, 256)
+		cd.nInfos = make([]NInfo, 256)
+		cd.blocks = make([]Block, 1)
 	}
 	if cd.LoadSize > 0 { // if there is data in mmap, do not need init meta
 		return cd

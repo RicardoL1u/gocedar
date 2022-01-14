@@ -7,9 +7,9 @@ import (
 )
 
 var (
-	cd *Cedar
-
-	words = []string{
+	cd      *Cedar
+	useMMap = true
+	words   = []string{
 		"魔术师",
 		"Cryin'",
 		"荒谬世界",
@@ -31,7 +31,7 @@ var (
 func TestFLoadData(t *testing.T) {
 	cd := New(&Options{
 		Reduced:  true,
-		UseMMap:  true,
+		UseMMap:  useMMap,
 		MMapPath: dumpPath,
 	})
 	defer cd.Close()
@@ -61,9 +61,12 @@ func TestFLoadData(t *testing.T) {
 }
 
 func TestFFind(t *testing.T) {
+	if !useMMap {
+		return
+	}
 	cd := New(&Options{
 		Reduced:  true,
-		UseMMap:  true,
+		UseMMap:  useMMap,
 		MMapPath: dumpPath,
 	})
 	defer cd.Close()
