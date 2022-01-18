@@ -1,4 +1,4 @@
-package cedar
+package gocedar
 
 // mmap 为 cedar 提供 initData, addBlock 等接口，使得 cedar 中读取和写入的 array等信息直接 map 到文件中，做到 demanding page
 // 输入：mmapDir，存放 mmap 文件的目录。由于要 map 的内容主要是3个slice，因而直接用3个文件映射。

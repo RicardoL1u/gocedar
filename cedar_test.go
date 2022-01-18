@@ -1,6 +1,7 @@
-package cedar
+package gocedar
 
 import (
+	"log"
 	"testing"
 
 	"github.com/vcaesar/tt"
@@ -70,8 +71,9 @@ func TestFFind(t *testing.T) {
 		MMapPath: dumpPath,
 	})
 	defer cd.Close()
-	// key, err := cd.Find([]byte("魔术师"), 0)
-	// tt.Nil(t, err)
+	key, err := cd.Find([]byte("最后的答案"), 0)
+	tt.Nil(t, err)
+	log.Printf("key %d\n", key)
 	// tt.Equal(t, 0, key)
 
 	val, err := cd.Get([]byte("魔术师"))
@@ -80,8 +82,9 @@ func TestFFind(t *testing.T) {
 
 	// to, err := cd.Jump([]byte("活得精彩"), 0)
 	// tt.Nil(t, err)
-	// tt.Equal(t, 352, to)
+	// log.Printf("to %d\n", to)
+	// // tt.Equal(t, 352, to)
 	// val, err = cd.Value(to)
 	// tt.Nil(t, err)
-	// tt.Equal(t, 3, val)
+	// // tt.Equal(t, 3, val)
 }
