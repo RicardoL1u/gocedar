@@ -6,7 +6,9 @@ require github.com/vcaesar/tt v0.20.0
 
 require (
 	github.com/go-ego/cedar v0.10.2
+	github.com/go-ego/gse v0.69.15
 	github.com/stretchr/testify v1.7.0
+	github.com/vcaesar/cedar v0.20.0
 )
 
 require (
