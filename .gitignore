@@ -5,6 +5,7 @@
 
 examples/examples
 dump_path/
+note.md
 
 # Binaries for programs and plugins
 *.exe

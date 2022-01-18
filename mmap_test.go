@@ -1,4 +1,4 @@
-package cedar
+package gocedar
 
 import (
 	"bufio"
@@ -143,6 +143,7 @@ func TestMLoadFromMMap(t *testing.T) {
 		}
 		t2 := time.Now()
 		v, err := ngocedar.Get(line)
+		// fmt.Println(v)
 		require.NoError(t, err)
 		require.Equal(t, index, v)
 		index++
