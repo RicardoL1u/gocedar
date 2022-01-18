@@ -1,4 +1,4 @@
-module github.com/vuuihc/gocedar
+module github.com/RicardoL1u/gocedar
 
 go 1.17
 
@@ -14,5 +14,10 @@ require (
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c // indirect
+	github.com/stretchr/objx v0.1.0 // indirect
+	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 )
+
+replace github.com/go-ego/gse => /home/ytaoliu/refactor/gse
+
+// replace github.com/bndr/gojenkins => github.com/Bpazy/gojenkins v0.69.16

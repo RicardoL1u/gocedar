@@ -3,7 +3,7 @@ package gocedar
 import (
 	"testing"
 
-	"github.com/go-ego/gse"
+	"github.com/RicardoL1u/gse"
 )
 
 func TestText2Bytes(t *testing.T) {
